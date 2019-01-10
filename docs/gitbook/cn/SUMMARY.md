@@ -21,13 +21,13 @@
 
 ## TABLE OF CONTENTS
 
-* [MSLQL](libraries/README.md)   
+* [MSLQL简介](libraries/README.md)   
     * [MSLQL-Engine]()
     * [MLSQL-Cluster]()
     * [MLSQL-Console]()
 
 
-* [Getting Started]()
+* [编译&运行&部署]()
     * [自助编译]()
     * [使用Docker]()
     * [多组件协同使用]()
@@ -43,6 +43,7 @@
     * [Parquet/Json/Text/Xml/Csv]()
     * [jsonStr/script]()
     * [mlsqlAPI/mlsqlConf]()
+    * [其他]()
 
 * [变量设置]()
     * [Conf]()
@@ -79,36 +80,41 @@
     * [如何附带资源文件]()  
 
 * [项目化脚本]()
-    * [MLSQL-Console include 使用示例]()
+    * [脚本如何互相引用]()
     
 
 * [流式计算]()
-    * [流式实战]()    
+    * [MLSQL流式计算概念简介]()
+    * [数据源]()
+       * Kafka
+       * Mock
+    * [如何将JSON/CSV转化为表]()
+    * [数据写入]()           
 
 * [特征工程组件]()
-    * [TfIdfInPlace]()
-      * [Word2VecInPlace]()
-      * [ScalerInPlace]()
-      * [ConfusionMatrix]()
-      * [FeatureExtract]()
-      * [NormalizeInPlace]()
-      * [ModelExplainInPlace]()
-      * [Discretizer]()
-        * [bucketizer]()
-        * [quantile]()
-      * [OpenCVImage]()
-      * [VecMapInPlace]()
-      * [JavaImage]()
-      * [TokenExtract / TokenAnalysis]()
-      * [RateSampler]()
-      * [RowMatrix]()
-      * [CommunityBasedSimilarityInPlace]()
-      * [Word2ArrayInPlace]()
-      * [WaterMarkInPlace]()      
-      * [MapValues]()
       
-     
-    
+  * [文本向量化操作-TfIdf]()
+  * [文本向量化操作-Word2Vec]()
+  * [ScalerInPlace]()
+  * [ConfusionMatrix]()
+  * [FeatureExtract]()
+  * [NormalizeInPlace]()
+  * [ModelExplainInPlace]()
+  * [Discretizer]()
+    * [bucketizer]()
+    * [quantile]()
+  * [OpenCVImage]()
+  * [VecMapInPlace]()
+  * [JavaImage]()
+  * [TokenExtract / TokenAnalysis]()
+  * [RateSampler]()
+  * [RowMatrix]()
+  * [CommunityBasedSimilarityInPlace]()
+  * [Word2ArrayInPlace]()
+  * [WaterMarkInPlace]()      
+  * [MapValues]()
+      
+         
 * [Python算法]()
     * [集成SKlearn示例]()
     * [集成TensorFlow示例]()
@@ -130,14 +136,15 @@
 
 * [深度学习]()
     * [加载图片数据]()
-    * [Cifar10实战]()
+    * [Cifar10示例]()
     
 * [部署算法API服务]()
     * [设计和原理]()
     * [案例剖析]()        
     
 * [爬虫]()
-    * [爬虫实战]()
+    * [爬虫示例]()
+    * [基于MLSQL爬虫系统的设计]()
 
 * [保障数据安全]()
     * [MLSQL统一授权体系]()
