@@ -21,18 +21,17 @@
 
 ## TABLE OF CONTENTS
 
-* [MSLQL简介](libraries/README.md)   
-    * [MSLQL-Engine]()
-    * [MLSQL-Cluster]()
-    * [MLSQL-Console]()
+* [MSLQL简介](getting_started/README.md)   
+    * [MSLQL-Engine](getting_started/mlsql-engine.md)
+    * [MLSQL-Cluster](getting_started/mlsql-cluster.md)
+    * [MLSQL-Console](getting_started/mlsql-console.md)
 
 
-* [编译&运行&部署]()
-    * [自助编译]()
-    * [使用Docker]()
-    * [多组件协同使用]()
-    * [如何运行]()
-    * [启动参数说明]()
+* [编译&运行&部署](installation/README.md)
+    * [自助编译](installation/compile.md)
+    * [使用Docker](installation/docker.md)   
+    * [如何运行](installation/run.md)
+    * [启动参数说明](installation/startup-configuration.md)
 
 * [数据源]()      
     * [JDBC]()
@@ -86,8 +85,8 @@
 * [流式计算]()
     * [MLSQL流式计算概念简介]()
     * [数据源]()
-       * Kafka
-       * Mock
+       * [Kafka]()
+       * [Mock]()
     * [如何将JSON/CSV转化为表]()
     * [数据写入]()           
 
