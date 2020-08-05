@@ -20,6 +20,7 @@ package streaming.core
 
 /**
   * Created by allwefantasy on 30/3/2017.
+ *  开发调试入口
   */
 object LocalSparkServiceApp {
   def main(args: Array[String]): Unit = {
@@ -48,7 +49,9 @@ object LocalSparkServiceApp {
       "-streaming.driver.port", "9003",
       "-spark.files.maxPartitionBytes", "10485760",
       "-spark.sql.shuffle.partitions", "1",
-      "-spark.hadoop.mapreduce.job.run-local", "true"
+      "-spark.hadoop.mapreduce.job.run-local", "true",
+      //添加datalake路径
+      "-streaming.datalake.path","/tmp/datahouse"
 
       //"-streaming.sql.out.path","file:///tmp/test/pdate=20160809"
 

@@ -28,10 +28,9 @@ object LocalFlinkStreamingApp {
   def main(args: Array[String]): Unit = {
     StreamingApp.main(Array(
       "-streaming.master", "local[2]",
-      "-streaming.name", "god",
       "-streaming.rest", "false",
       "-streaming.platform", "flink_streaming",
-      "-streaming.spark.service", "false"
+      "-streaming.sp      \"-streaming.name\", \"god\",ark.service", "false"
 
     ))
   }

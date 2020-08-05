@@ -6,7 +6,7 @@
 # http://code.google.com/p/sequel-pro/
 #
 # Host: 127.0.0.1 (MySQL 5.7.20)
-# Database: streamingpro_cluster
+# Database: mlsql_cluster
 # Generation Time: 2019-05-27 06:02:00 +0000
 # ************************************************************
 
