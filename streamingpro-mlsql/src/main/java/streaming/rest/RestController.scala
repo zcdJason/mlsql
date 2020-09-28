@@ -89,7 +89,8 @@ class RestController extends ApplicationController with WowLog {
     new Parameter(name = "skipInclude", required = false, description = "disable include statement. default: false", `type` = "boolean", allowEmptyValue = false),
     new Parameter(name = "skipAuth", required = false, description = "disable table authorize . default: true", `type` = "boolean", allowEmptyValue = false),
     new Parameter(name = "skipGrammarValidate", required = false, description = "validate mlsql grammar. default: true", `type` = "boolean", allowEmptyValue = false),
-    new Parameter(name = "includeSchema", required = false, description = "the return value should contains schema info. default: false", `type` = "boolean", allowEmptyValue = false)
+    new Parameter(name = "includeSchema", required = false, description = "the return value should contains schema info. default: false", `type` = "boolean", allowEmptyValue = false),
+    new Parameter(name = "fetchType", required = false, description = "take/collect. default: collect", `type` = "string", allowEmptyValue = false)
   ))
   @Responses(Array(
     new ApiResponse(responseCode = "200", description = "", content = new Content(mediaType = "application/json",
@@ -99,8 +100,11 @@ class RestController extends ApplicationController with WowLog {
   @At(path = Array("/run/script"), types = Array(GET, POST))
   def script = {
     setAccessControlAllowOrigin
+
     val silence = paramAsBoolean("silence", false)
     val sparkSession = getSession
+
+    accessAuth(sparkSession)
 
     val htp = findService(classOf[HttpTransportService])
     if (paramAsBoolean("async", false) && !params().containsKey("callback")) {
@@ -194,9 +198,29 @@ class RestController extends ApplicationController with WowLog {
     render(outputResult)
   }
 
+  private def accessAuth(sparkSession: SparkSession) = {
+    val accessToken = sparkSession.conf.get("spark.mlsql.auth.access_token", "")
+    if (!accessToken.isEmpty) {
+      if (param("access_token") != accessToken) {
+        render(403, JSONTool.toJsonStr(Map("msg" -> "access_token is not right")))
+      }
+    }
+
+    val customAuth = sparkSession.conf.get("spark.mlsql.auth.custom", "")
+    if (!customAuth.isEmpty) {
+      import scala.collection.JavaConverters._
+      val restParams = params().asScala.toMap
+      val (isOk, message) = Class.forName(customAuth).asInstanceOf[ {def auth(params: Map[String, String]): (Boolean, String)}].auth(restParams)
+      if (!isOk) {
+        render(403, JSONTool.toJsonStr(Map("msg" -> message)))
+      }
+    }
+  }
+
   private def getScriptResult(context: ScriptSQLExecListener, sparkSession: SparkSession): String = {
     val result = new StringBuffer()
     val includeSchema = param("includeSchema", "false").toBoolean
+    val fetchType = param("fetchType", "collect")
     if (includeSchema) {
       result.append("{")
     }
@@ -210,9 +234,14 @@ class RestController extends ApplicationController with WowLog {
         if (context.env().getOrElse(MLSQLEnvKey.CONTEXT_SYSTEM_TABLE, "false").toBoolean) {
           result.append("[" + WowJsonInferSchema.toJson(df).mkString(",") + "]")
         } else {
-          val scriptJsonStringResult = limitOrNot {
-            sparkSession.sql(s"select * from $table limit " + paramAsInt("outputSize", 5000))
-          }.toJSON.collect().mkString(",")
+          val outputSize = paramAsInt("outputSize", 5000)
+          val jsonDF = limitOrNot {
+            sparkSession.sql(s"select * from $table limit " + outputSize)
+          }.toJSON
+          val scriptJsonStringResult = fetchType match {
+            case "collect" => jsonDF.collect().mkString(",")
+            case "take" => sparkSession.table(table).toJSON.take(outputSize).mkString(",")
+          }
           result.append("[" + scriptJsonStringResult + "]")
         }
       case None => result.append("[]")
@@ -256,6 +285,7 @@ class RestController extends ApplicationController with WowLog {
   @At(path = Array("/download"), types = Array(GET, POST))
   def download = {
     intercept()
+    accessAuth(getSession)
     val filename = param("fileName", System.currentTimeMillis() + "")
     param("fileType", "raw") match {
       case "tar" =>
@@ -297,6 +327,7 @@ class RestController extends ApplicationController with WowLog {
   @At(path = Array("/runningjobs"), types = Array(GET, POST))
   def getRunningJobGroup = {
     setAccessControlAllowOrigin
+    accessAuth(getSession)
     val infoMap = JobManager.getJobInfo
     render(200, toJsonString(infoMap))
   }
@@ -357,7 +388,7 @@ class RestController extends ApplicationController with WowLog {
   @At(path = Array("/killjob"), types = Array(GET, POST))
   def killJob = {
     setAccessControlAllowOrigin
-
+    accessAuth(getSession)
     val groupId = param("groupId")
     if (groupId == null) {
       val jobName = param("jobName")
@@ -391,6 +422,7 @@ class RestController extends ApplicationController with WowLog {
   @At(path = Array("/user/logout"), types = Array(GET, POST))
   def userLogout = {
     setAccessControlAllowOrigin
+    accessAuth(getSession)
     require(hasParam("owner"), "owner is should be set ")
     if (paramAsBoolean("sessionPerUser", false)) {
       val sparkRuntime = runtime.asInstanceOf[SparkRuntime]

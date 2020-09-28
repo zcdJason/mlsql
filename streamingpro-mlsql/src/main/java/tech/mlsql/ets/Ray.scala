@@ -4,12 +4,12 @@ import java.net.ServerSocket
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.ml.param.Param
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.mlsql.session.MLSQLException
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession, SparkUtils}
-import org.apache.spark.{MLSQLSparkUtils, SparkInstanceService, TaskContext, WowRowEncoder}
+import org.apache.spark.{MLSQLSparkUtils, SparkEnv, SparkInstanceService, TaskContext, WowRowEncoder}
 import streaming.core.datasource.util.MLSQLJobCollect
 import streaming.dsl.ScriptSQLExec
 import streaming.dsl.mmlib._
@@ -22,9 +22,11 @@ import tech.mlsql.arrow.python.runner._
 import tech.mlsql.common.utils.base.TryTool
 import tech.mlsql.common.utils.distribute.socket.server.{ReportHostAndPort, SocketServerInExecutor}
 import tech.mlsql.common.utils.lang.sc.ScalaMethodMacros
+import tech.mlsql.common.utils.net.NetTool
 import tech.mlsql.common.utils.network.NetUtils
 import tech.mlsql.common.utils.serder.json.JSONTool
 import tech.mlsql.ets.ray.{CollectServerInDriver, DataServer}
+import tech.mlsql.log.WriteLog
 import tech.mlsql.schema.parser.SparkSimpleSchemaParser
 import tech.mlsql.session.SetSession
 import tech.mlsql.version.VersionCompatibility
@@ -52,15 +54,14 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
     val envSession = new SetSession(spark, ScriptSQLExec.context().owner)
     envSession.set("pythonMode", "ray", Map(SetSession.__MLSQL_CL__ -> SetSession.PYTHON_RUNNER_CONF_CL))
 
-    val command = JSONTool.parseJson[List[String]](params("parameters")).toArray
-    val newdf = command match {
-      case Array("on", tableName, code) =>
 
-        distribute_execute(spark, genCode(code), tableName)
+    val newdf = Array(params(inputTable.name), params(code.name), params(outputTable.name)) match {
+      case Array(input, code, "") =>
+        distribute_execute(spark, genCode(code), input)
 
-      case Array("on", tableName, code, "named", targetTable) =>
-        val resDf = distribute_execute(spark, genCode(code), tableName)
-        resDf.createOrReplaceTempView(targetTable)
+      case Array(input, code, output) =>
+        val resDf = distribute_execute(spark, genCode(code), input)
+        resDf.createOrReplaceTempView(output)
         resDf
     }
     newdf
@@ -96,12 +97,14 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
 
     var targetLen = df.rdd.partitions.length
 
+
     val tempdf = TryTool.tryOrElse {
       val resource = new SparkInstanceService(session).resources
       val jobInfo = new MLSQLJobCollect(session, context.owner)
       val leftResource = resource.totalCores - jobInfo.resourceSummary(null).activeTasks
-      if (leftResource <= targetLen) {
-        df.repartition(Math.max(Math.floor(leftResource / 2), 1).toInt)
+      logInfo(s"RayMode: Resource:[${leftResource}(${resource.totalCores}-${jobInfo.resourceSummary(null).activeTasks})] TargetLen:[${targetLen}]")
+      if (leftResource / 2 <= targetLen) {
+        df.repartition(Math.max(Math.floor(leftResource / 2) - 1, 1).toInt)
       } else df
     } {
       //      WriteLog.write(List("Warning: Fail to detect instance resource. Setup 4 data server for Python.").toIterator, runnerConf)
@@ -111,8 +114,9 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
       } else df
     }
 
-
     targetLen = tempdf.rdd.partitions.length
+    logInfo(s"RayMode: Final TargetLen ${targetLen}")
+    val _owner = ScriptSQLExec.context().owner
 
     val thread = new Thread("temp-data-server-in-spark") {
       override def run(): Unit = {
@@ -121,11 +125,15 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
         val tempSocketServerHost = tempSocketServerInDriver._host
         val tempSocketServerPort = tempSocketServerInDriver._port
         val timezoneID = session.sessionState.conf.sessionLocalTimeZone
-
+        val owner = _owner
         tempdf.rdd.mapPartitions { iter =>
 
-          val host: String = if (MLSQLSparkUtils.rpcEnv().address == null) NetUtils.getHost
-          else MLSQLSparkUtils.rpcEnv().address.host
+          val host: String = if (SparkEnv.get == null || MLSQLSparkUtils.blockManager == null || MLSQLSparkUtils.blockManager.blockManagerId == null) {
+            WriteLog.write(List("Ray: Cannot get MLSQLSparkUtils.rpcEnv().address, using NetTool.localHostName()").iterator,
+              Map("PY_EXECUTE_USER" -> owner))
+            NetTool.localHostName()
+          }
+          else MLSQLSparkUtils.blockManager.blockManagerId.host
 
           val socketRunner = new SparkSocketRunner("serveToStreamWithArrow", host, timezoneID)
           val commonTaskContext = new SparkContextImp(TaskContext.get(), null)
@@ -205,7 +213,7 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
           )
 
           val newIter = iter.map { irow =>
-            convert(irow)
+            convert(irow).copy()
           }
           val commonTaskContext = new SparkContextImp(TaskContext.get(), batch)
           val columnarBatchIter = batch.compute(Iterator(newIter), TaskContext.getPartitionId(), commonTaskContext)
@@ -229,7 +237,7 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
         )
 
         val newIter = dataServers.map { irow =>
-          convert(Row.fromSeq(Seq(irow.host, irow.port, irow.timezone)))
+          convert(Row.fromSeq(Seq(irow.host, irow.port, irow.timezone))).copy()
         }.iterator
         val javaContext = new JavaContext()
         val commonTaskContext = new AppContextImpl(javaContext, batch)
@@ -247,14 +255,16 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
 
     if (dataMode == "data") {
       val rows = outputDF.collect()
-      val rdd = session.sparkContext.makeRDD[Row](rows)
-      val stage2_schema_encoder= WowRowEncoder.fromRow(stage2_schema)
+      val rdd = session.sparkContext.makeRDD[Row](rows, numSlices = rows.length)
+      val stage2_schema_encoder = WowRowEncoder.fromRow(stage2_schema)
       val newRDD = if (rdd.partitions.length > 0 && rows.length > 0) {
-        rdd.repartition(rows.length).flatMap { row =>
-
+        rdd.flatMap { row =>
           val socketRunner = new SparkSocketRunner("readFromStreamWithArrow", NetUtils.getHost, timezoneID)
           val commonTaskContext = new SparkContextImp(TaskContext.get(), null)
-          val iter = socketRunner.readFromStreamWithArrow(row.getAs[String]("host"), row.getAs[Long]("port").toInt, commonTaskContext)
+          val pythonWorkerHost = row.getAs[String]("host")
+          val pythonWorkerPort = row.getAs[Long]("port").toInt
+          logInfo(s" Ray On Data Mode: connect python worker[${pythonWorkerHost}:${pythonWorkerPort}] ")
+          val iter = socketRunner.readFromStreamWithArrow(pythonWorkerHost, pythonWorkerPort, commonTaskContext)
           iter.map(f => f.copy())
         }
       } else rdd.map(f => stage2_schema_encoder(f))
@@ -263,7 +273,6 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
     } else {
       outputDF
     }
-
 
   }
 
@@ -319,6 +328,10 @@ class Ray(override val uid: String) extends SQLAlg with VersionCompatibility wit
     runnerConf
   }
 
+
+  final val inputTable: Param[String] = new Param[String](this, "inputTable", " ")
+  final val code: Param[String] = new Param[String](this, "code", " ")
+  final val outputTable: Param[String] = new Param[String](this, "outputTable", " ")
 
   override def supportedVersions: Seq[String] = {
     Seq("1.5.0-SNAPSHOT", "1.5.0")

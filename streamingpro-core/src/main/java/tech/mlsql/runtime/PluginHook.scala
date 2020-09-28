@@ -31,7 +31,10 @@ class PluginHook extends MLSQLPlatformLifecycle with Logging {
       }
 
     // build-in plugins
-    PluginHook.startBuildIn()
+    PluginHook.startBuildIn(
+      params.get("streaming.plugin.clzznames").
+        map(item => item.split(",")).
+        getOrElse(Array[String]()))
 
 
     if (!params.contains("streaming.datalake.path")) return
@@ -46,7 +49,7 @@ class PluginHook extends MLSQLPlatformLifecycle with Logging {
 
     plugins.as[AddPlugin].collect().foreach { plugin =>
       logInfo(s"Plugin ${plugin.pluginName} in ${plugin.path}")
-      val localPath = downloadFromHDFSToLocal(plugin.path.split("/").last, plugin.path,spark.sparkContext.hadoopConfiguration)
+      val localPath = downloadFromHDFSToLocal(plugin.path.split("/").last, plugin.path, spark.sparkContext.hadoopConfiguration)
 
       if (plugin.pluginType == PluginType.DS
         || plugin.pluginType == PluginType.ET
@@ -90,14 +93,16 @@ object PluginHook extends Logging {
     "tech.mlsql.plugins.app.pythoncontroller.PythonApp",
     "tech.mlsql.plugins.mlsql_watcher.MLSQLWatcher",
     "tech.mlsql.plugins.sql.profiler.ProfilerApp",
-    "tech.mlsql.autosuggest.app.MLSQLAutoSuggestApp"
+    "tech.mlsql.autosuggest.app.MLSQLAutoSuggestApp",
+    "tech.mlsql.plugins.ets.ETApp",
+    "tech.mlsql.plugins.healthy.App"
   )
 
-  def startBuildIn(): Unit = {
+  def startBuildIn(extra: Array[String]): Unit = {
     if (SparkCoreVersion.is_2_3_X()) {
       return
     }
-    apps.foreach { app =>
+    (apps ++ extra).foreach { app =>
       try {
         ClassLoaderTool.classForName(app).newInstance().
           asInstanceOf[tech.mlsql.app.App].run(Seq[String]())

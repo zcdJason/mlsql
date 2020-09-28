@@ -5,7 +5,7 @@ import java.net.Socket
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.ml.param.Param
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.mlsql.session.MLSQLException
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -28,12 +28,17 @@ import tech.mlsql.schema.parser.SparkSimpleSchemaParser
 import tech.mlsql.session.SetSession
 
 import scala.collection.mutable.ArrayBuffer
+import tech.mlsql.tool.ScriptEnvDecode._
 
 /**
  * 2019-08-16 WilliamZhu(allwefantasy@gmail.com)
  */
 class PythonCommand(override val uid: String) extends SQLAlg with Functions with WowParams {
   def this() = this(BaseParams.randomUID())
+
+  final val inputTable: Param[String] = new Param[String](this, "inputTable", " ")
+  final val code: Param[String] = new Param[String](this, "code", " ")
+  final val outputTable: Param[String] = new Param[String](this, "outputTable", " ")
 
   override def train(df: DataFrame, path: String, params: Map[String, String]): DataFrame = {
 
@@ -191,12 +196,12 @@ class PythonCommand(override val uid: String) extends SQLAlg with Functions with
         emptyDataFrame(spark, "value")
 
       case Array("env", kv) => // !python env a=b
-        val Array(k, v) = kv.split("=", 2)
+        val Array(k, v) = decode(kv).split("=", 2)
         envSession.set(k, v, Map(SetSession.__MLSQL_CL__ -> SetSession.PYTHON_ENV_CL))
         envSession.fetchPythonEnv.get.toDF()
 
       case Array("conf", kv) => // !python env a=b
-        val Array(k, v) = kv.split("=", 2)
+        val Array(k, v) = decode(kv).split("=", 2)
         envSession.set(k, v, Map(SetSession.__MLSQL_CL__ -> SetSession.PYTHON_RUNNER_CONF_CL))
         envSession.fetchPythonRunnerConf.get.toDF()
 
@@ -289,7 +294,7 @@ class PythonCommand(override val uid: String) extends SQLAlg with Functions with
         )
 
         val newIter = iter.map { irow =>
-          encoder(irow)
+          encoder(irow).copy()
         }
         val commonTaskContext = new SparkContextImp(TaskContext.get(), batch)
         val columnarBatchIter = batch.compute(Iterator(newIter), TaskContext.getPartitionId(), commonTaskContext)
