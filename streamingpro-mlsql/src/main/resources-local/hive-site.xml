@@ -31,17 +31,17 @@
 
 <property>
   <name>javax.jdo.option.ConnectionUserName</name>
-  <value>root</value>
+  <value>hive</value>
 </property>
 
 <property>
   <name>javax.jdo.option.ConnectionPassword</name>
-  <value>mlsql</value>
+  <value>hive</value>
 </property>
 
 <property>
   <name>hive.metastore.warehouse.dir</name>
-  <value>file:///tmp/user/hive/warehouse</value>
+  <value>file:///user/hive/warehouse</value>
 </property>
 
 <property>
@@ -51,7 +51,7 @@
 
 <property>
  <name>hive.metastore.uris</name>
- <value></value>
+ <value>thrift://172.16.110.13:9083</value>
 </property>
 
 <property>
