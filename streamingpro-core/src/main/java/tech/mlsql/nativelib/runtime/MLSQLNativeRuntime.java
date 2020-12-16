@@ -5,7 +5,6 @@ package tech.mlsql.nativelib.runtime;
  */
 public class MLSQLNativeRuntime {
     static {
-        //"/Volumes/Samsung_T5/projects/MlsqlNativeLib/build"
         JniUtils.loadLibrary(JniUtils.MLSQL_NATIVE_LIB);
     }
 
