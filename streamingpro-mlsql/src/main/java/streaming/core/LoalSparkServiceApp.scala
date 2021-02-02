@@ -18,6 +18,8 @@
 
 package streaming.core
 
+import org.apache.spark.sql.SparkSession
+
 /**
   * Created by allwefantasy on 30/3/2017.
  *  开发调试入口
@@ -32,15 +34,22 @@ object LocalSparkServiceApp {
       "-streaming.platform", "spark",
       //"-spark.mlsql.enable.max.result.limit", "true",
       //"-spark.mlsql.restful.api.max.result.size", "7",
-      //      "-spark.mlsql.enable.datasource.rewrite", "true",
-      //      "-spark.mlsql.datasource.rewrite.implClass", "streaming.core.datasource.impl.TestRewrite",
+      //"-spark.mlsql.enable.datasource.rewrite", "true",
+      //"-spark.mlsql.datasource.rewrite.implClass", "streaming.core.datasource.impl.TestRewrite",
       //"-streaming.job.file.path", "classpath:///test/empty.json",
       "-streaming.spark.service", "true",
       "-streaming.job.cancel", "true",
       "-streaming.ps.enable", "true",
-      "-spark.sql.hive.thriftServer.singleSession", "true",
+
+      "-spark.sql.hive.thriftServer.singleSession", "false",
+      "-streaming.enableHiveSupport", "true",
+
       "-streaming.rest.intercept.clzz", "streaming.rest.ExampleRestInterceptor",
-      "-streaming.deploy.rest.api", "true",
+
+      //用Local模式部署成API时，请开启该选项，此参数会导致hive失效（使用hive表没有效果，会提示找不到表），默认sparkcontext会被替换  |false|
+      //这个模式主要是为了对外提供毫秒级的预测服务
+      "-streaming.deploy.rest.api", "false",
+
       "-spark.driver.maxResultSize", "2g",
       "-spark.serializer", "org.apache.spark.serializer.KryoSerializer",
       "-spark.sql.codegen.wholeStage", "true",
@@ -50,8 +59,9 @@ object LocalSparkServiceApp {
       "-spark.files.maxPartitionBytes", "10485760",
       "-spark.sql.shuffle.partitions", "1",
       "-spark.hadoop.mapreduce.job.run-local", "true",
-      //添加datalake路径
-      "-streaming.datalake.path","/tmp/datahouse"
+      //添加datalake路径，这个路径配置插件的时候也需要使用（插件的信息和有些元信息存储的位置，如果没有配置数据库，默认使用它来记录信息）
+      "-streaming.datalake.path","/tmp/datahouse",
+      "-streaming.plugin.clzznames","tech.mlsql.plugins.ds.MLSQLExcelApp" //配置excel插件主类
 
       //"-streaming.sql.out.path","file:///tmp/test/pdate=20160809"
 
